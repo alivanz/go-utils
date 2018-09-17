@@ -1,8 +1,8 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 )
 
@@ -38,43 +38,63 @@ func (w *bwriter) WriteUint64(d uint64) error {
 	return err
 }
 
-func (w *bwriter) WriteCompactUint(i uint64) error {
+func CompactUint(i uint64) []byte {
+	b := make([]byte, 9)
+	binary.LittleEndian.PutUint64(b[1:], i)
 	if i <= 252 {
-		return w.WriteByte(byte(i))
+		return b[1:2]
 	} else if i <= 0xffff {
-		w.WriteByte(0xfd)
-		return w.WriteUint16(uint16(i))
+		b[0] = 0xfd
+		return b[:3]
 	} else if i <= 0xffffffff {
-		w.WriteByte(0xfe)
-		return w.WriteUint32(uint32(i))
+		b[0] = 0xfe
+		return b[:5]
 	} else {
-		w.WriteByte(0xff)
-		return w.WriteUint64(i)
+		b[0] = 0xff
+		return b[:9]
 	}
 }
+func (w *bwriter) WriteCompactUint(i uint64) error {
+	if _, err := w.Write(CompactUint(i)); err != nil {
+		return err
+	}
+	return nil
+}
 func (w *bwriter) WriteCompact(bin []byte) error {
-	w.WriteCompactUint(uint64(len(bin)))
-	_, err := w.Write(bin)
+	buf := bytes.NewBuffer(nil)
+	buf.Write(CompactUint(uint64(len(bin))))
+	buf.Write(bin)
+	_, err := w.Write(buf.Bytes())
 	return err
 }
 
-func (w *bwriter) WriteDERLength(l uint64) error {
+func DERLength(l uint64) []byte {
 	if l < 0x80 {
-		return w.WriteByte(byte(l))
+		return []byte{byte(l)}
 	}
+	buf := bytes.NewBuffer(nil)
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, l)
-	for x := 0; x < 8; x = x + 1 {
+	var x int
+	for x = 0; x < 8; x = x + 1 {
 		if b[x] != 0 {
-			w.WriteByte(byte(0x88 - x))
-			_, err := w.Write(b[x:])
-			return err
+			break
 		}
 	}
-	return fmt.Errorf("Wrong algo")
+	buf.WriteByte(byte(0x88 - x))
+	buf.Write(b[x:])
+	return buf.Bytes()
+}
+func (w *bwriter) WriteDERLength(l uint64) error {
+	if _, err := w.Write(DERLength(l)); err != nil {
+		return err
+	}
+	return nil
 }
 func (w *bwriter) WriteDER(bin []byte) error {
-	w.WriteDERLength(uint64(len(bin)))
-	_, err := w.Write(bin)
+	buf := bytes.NewBuffer(nil)
+	buf.Write(DERLength(uint64(len(bin))))
+	buf.Write(bin)
+	_, err := w.Write(buf.Bytes())
 	return err
 }
