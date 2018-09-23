@@ -1,6 +1,7 @@
 package layer
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/elliptic"
@@ -16,7 +17,7 @@ type ecdhlayer struct {
 	gcm      cipher.AEAD
 	rnonce   utils.Nonce96
 	wnonce   utils.Nonce96
-	buffered []byte
+	buffered *bytes.Buffer
 }
 
 func ECDHComputeShared(curve elliptic.Curve, x, y *big.Int, private []byte) []byte {
@@ -53,18 +54,14 @@ func ECDHLayer(conn io.ReadWriter) (io.ReadWriter, error) {
 	if err != nil {
 		panic(err.Error())
 	}
-	rnonce := big.NewInt(0)
-	wnonce := big.NewInt(0)
-	rnonce.SetBit(rnonce, 88, 1)
-	wnonce.SetBit(wnonce, 88, 1)
-	return &ecdhlayer{utils.NewBinaryReadWriter(conn), aesgcm, utils.Nonce96{}, utils.Nonce96{}, []byte{}}, nil
+	return &ecdhlayer{utils.NewBinaryReadWriter(conn), aesgcm, utils.Nonce96{}, utils.Nonce96{}, bytes.NewBuffer(nil)}, nil
 }
 
 func (layer *ecdhlayer) Read(b []byte) (int, error) {
-	if len(layer.buffered) > 0 {
-		n := copy(b, layer.buffered)
-		layer.buffered = layer.buffered[n:]
-		return n, nil
+	if layer.buffered.Len() > 0 {
+		return layer.buffered.Read(b)
+	} else {
+		layer.buffered.Reset()
 	}
 	ciphertext, err := layer.rw.ReadCompact()
 	bnonce := layer.rnonce.Nonce()
@@ -72,9 +69,8 @@ func (layer *ecdhlayer) Read(b []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	n := copy(b, plain)
-	layer.buffered = plain[n:]
-	return len(b), nil
+	layer.buffered.Write(plain)
+	return layer.buffered.Read(b)
 }
 func (layer *ecdhlayer) Write(b []byte) (int, error) {
 	bnonce := layer.wnonce.Nonce()
