@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"crypto/elliptic"
 	"crypto/rand"
+	"fmt"
 	"io"
 	"math/big"
 
@@ -46,7 +47,13 @@ func ECDHLayer(conn io.ReadWriter) (io.ReadWriter, error) {
 	if err != nil {
 		return nil, err
 	}
-	block, err := aes.NewCipher(shared[:32])
+	return ECDHLayerPreShared(conn, shared)
+}
+func ECDHLayerPreShared(conn io.ReadWriter, shared []byte) (io.ReadWriter, error) {
+	if len(shared) != 32 {
+		return nil, fmt.Errorf("shared key length != 32")
+	}
+	block, err := aes.NewCipher(shared)
 	if err != nil {
 		panic(err.Error())
 	}
