@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -17,6 +18,9 @@ type SSEEvent struct {
 	Event string
 	Data  []byte
 }
+
+// SSEListener is a listener for SSE.Listen
+type SSEListener func(event *SSEEvent)
 
 // NewSSE Create SSE Reader
 func NewSSE(r io.Reader) *SSE {
@@ -38,12 +42,31 @@ func (sse *SSE) ReadEvent() (*SSEEvent, error) {
 		return nil, err
 	}
 	// skip line
-	sse.reader.ReadLine()
+	b, err := sse.reader.ReadByte()
+	if err != nil {
+		return nil, err
+	}
+	if b != '\n' {
+		return nil, errors.New("wrong format")
+	}
 	// finally
 	return &SSEEvent{
 		Event: eventName,
 		Data:  []byte(data),
 	}, nil
+}
+
+// Listen listen SSE events until EOF
+func (sse *SSE) Listen(listener SSEListener) error {
+	for {
+		event, err := sse.ReadEvent()
+		if err == io.EOF {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		go listener(event)
+	}
 }
 
 func (sse *SSE) sseMustMatchKey(key string) (string, error) {
@@ -57,12 +80,13 @@ func (sse *SSE) sseMustMatchKey(key string) (string, error) {
 	return v, nil
 }
 func (sse *SSE) sseReadData() (k string, v string, err error) {
-	bline, _, errx := sse.reader.ReadLine()
-	if err != nil {
+	bline, errx := sse.reader.ReadSlice('\n')
+	if errx != nil {
 		err = errx
 		return
 	}
-	line := string(bline[:len(bline)])
+	line := string(bline[:len(bline)-1])
+	// line := string(bline[:len(bline)])
 	return splitKeyValue(line, ": ")
 }
 func splitKeyValue(line string, delim string) (k string, v string, err error) {
