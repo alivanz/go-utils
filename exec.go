@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os/exec"
+	"strings"
 )
 
 func ExecReadLines(name string, params []string) ([]string, error) {
@@ -20,6 +21,8 @@ func ExecReadLines(name string, params []string) ([]string, error) {
 		} else if err != nil {
 			return nil, err
 		}
+		line = strings.TrimSuffix(line, "\n")
+		line = strings.TrimSuffix(line, "\x10")
 		lines = append(lines, line)
 	}
 }
