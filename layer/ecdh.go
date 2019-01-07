@@ -10,7 +10,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/alivanz/go-utils"
+	utils "github.com/alivanz/go-utils"
 )
 
 type ecdhlayer struct {
