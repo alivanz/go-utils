@@ -27,3 +27,25 @@ func ReadFileLines(filename string) ([]string, error) {
 	}
 	return out, nil
 }
+
+func WriteFileLine(filename string, lines ...string) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	for _, line := range lines {
+		f.WriteString(line + "\n")
+	}
+	return nil
+}
+
+func WriteFileString(filename string, s string) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	f.WriteString(s)
+	return nil
+}
